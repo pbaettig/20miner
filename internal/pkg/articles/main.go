@@ -1,7 +1,6 @@
 package articles
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -9,27 +8,41 @@ import (
 	"time"
 
 	"github.com/pbaettig/20miner/internal/config"
+	"github.com/pbaettig/20miner/internal/pkg/comments"
 	hp "github.com/pbaettig/20miner/internal/pkg/htmlparser"
+	"github.com/pbaettig/20miner/internal/pkg/utils"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+	"gorm.io/gorm"
 )
 
 type ArticleLink struct {
-	ID    string
-	Href  string
-	Title string
+	OriginalID string
+	Href       string
+	Title      string
+}
+
+type Shares struct {
+	gorm.Model
+
+	ArticleID uint
+	Value     uint
 }
 
 type Article struct {
 	ArticleLink
-
+	gorm.Model
+	// ID              uint
 	PublicationDate time.Time
 	Category        string
 	Text            string
+	Shares          Shares
+	Comments        []*comments.Comment
 }
 
 func (al ArticleLink) Get(c *http.Client) Article {
 	a := Article{ArticleLink: al}
+	a.ID = utils.MustIntToUint(al.OriginalID)
 
 	uri, err := url.JoinPath(config.BaseURL, al.Href)
 	if err != nil {
@@ -54,13 +67,14 @@ func (al ArticleLink) Get(c *http.Client) Article {
 			}
 		}
 
-		if n.DataAtom == atom.Span && n.DataAtom == atom.Button {
-			class := hp.GetNodeAttr(n, "class")
-			if strings.HasPrefix(class, "ActivityButton_activityCounter_") {
-				fmt.Printf("************** Class: %s\n", class)
-				fmt.Printf("************** Parent: %+v\n", n.Parent)
-				fmt.Printf("************** Acitivity: %s\n", hp.GetNodeChildData(n))
-				fmt.Println()
+		if n.DataAtom == atom.Span && n.Parent.DataAtom == atom.Button {
+			parentTestID := hp.GetNodeAttr(n.Parent, "data-testid")
+			if parentTestID == "ButtonShare" && n.FirstChild.Type == html.TextNode {
+				a.Shares = Shares{Value: utils.MustIntToUint(hp.GetNodeChildData(n))}
+				// fmt.Printf("************** Class: %s\n", class)
+				// fmt.Printf("************** Parent: %+v\n", n.Parent)
+				// fmt.Printf("************** Acitivity: %s\n", hp.GetNodeChildData(n))
+				// fmt.Println()
 			}
 		}
 
@@ -85,7 +99,7 @@ func (al ArticleLink) Get(c *http.Client) Article {
 
 func processArticleLinkNode(n *html.Node) (a ArticleLink) {
 	a.Href = hp.GetNodeAttr(n, "href")
-	a.ID = hp.GetNodeAttr(n.Parent, "id")
+	a.OriginalID = hp.GetNodeAttr(n.Parent, "id")
 
 	var f func(*html.Node)
 	f = func(n *html.Node) {

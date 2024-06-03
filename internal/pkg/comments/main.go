@@ -9,9 +9,15 @@ import (
 	"time"
 
 	"github.com/pbaettig/20miner/internal/config"
+	"github.com/pbaettig/20miner/internal/pkg/utils"
+	"gorm.io/gorm"
 )
 
-type reactions struct {
+type Reactions struct {
+	gorm.Model
+
+	CommentID uint
+
 	Awesome     int `json:"awesome"`
 	Bad         int `json:"bad"`
 	Nonsense    int `json:"nonsense"`
@@ -20,46 +26,58 @@ type reactions struct {
 	Exact       int `json:"exact"`
 }
 
-type commentBase struct {
-	ID             string `json:"id"`
-	ArticleID      string `json:"-"`
+type Comment struct {
+	ID        uint `json:"-"`
+	ArticleID uint `json:"-"`
+
+	Parent     *Comment `json:"-"`
+	ParentID   *uint    `json:"-"`
+	OriginalID string   `json:"id"`
+
 	AuthorNickname string `json:"authorNickname"`
-	AuthorAvatar   struct {
-		Light string `json:"light"`
-		Dark  string `json:"dark"`
-	} `json:"authorAvatar"`
-	Body          string        `json:"body"`
-	CounterSpeech bool          `json:"counterSpeech"`
-	CreatedAt     time.Time     `json:"createdAt"`
-	Reactions     reactions     `json:"reactions"`
-	Notes         []interface{} `json:"notes"`
+	// AuthorAvatar   struct {
+	// 	Light string `json:"light"`
+	// 	Dark  string `json:"dark"`
+	// } `json:"authorAvatar"`
+	Body          string    `json:"body"`
+	CounterSpeech bool      `json:"counterSpeech"`
+	CreatedAt     time.Time `json:"createdAt"`
+	Reactions     Reactions `json:"reactions"`
+	// Notes         []interface{} `json:"notes"`
 }
 
 type commentRepliesNested struct {
-	commentBase
-	Replies []commentBase `json:"replies"`
+	Comment
+	Replies []Comment `json:"replies"`
 }
 
-func (c commentRepliesNested) FlattenReplies() []Comment {
-	replies := make([]Comment, 0)
+func (c commentRepliesNested) FlattenReplies() []*Comment {
+	replies := make([]*Comment, 0)
+
+	cc := &c.Comment
+	cc.SetID()
+	cc.ParentID = nil
 
 	// Parent comment
-	replies = append(replies, Comment{
-		commentBase: c.commentBase,
-		ParentID:    "",
-	})
+	replies = append(replies, cc)
 
 	for _, reply := range c.Replies {
-		replies = append(replies, Comment{commentBase: reply, ParentID: c.ID})
+		reply.ParentID = &cc.ID
+		replies = append(replies, &reply)
+
 	}
 
 	return replies
 }
 
+func (c *Comment) SetID() {
+	c.ID = utils.StringToUintHash(c.OriginalID)
+}
+
 type commentsRepliesNested []commentRepliesNested
 
-func (cs commentsRepliesNested) Flatten() []Comment {
-	flattened := make([]Comment, 0)
+func (cs commentsRepliesNested) Flatten() []*Comment {
+	flattened := make([]*Comment, 0)
 	for _, c := range cs {
 		flattened = append(flattened, c.FlattenReplies()...)
 	}
@@ -67,11 +85,10 @@ func (cs commentsRepliesNested) Flatten() []Comment {
 	return flattened
 }
 
-type Comment struct {
-	commentBase
-	ArticleID string
-	ParentID  string
-}
+// type Comment struct {
+// 	commentBase
+// 	ParentID string
+// }
 
 type CommentApiResponse struct {
 	CommentingEnabled bool                   `json:"commentingEnabled"`
@@ -80,10 +97,10 @@ type CommentApiResponse struct {
 	Comments          []commentRepliesNested `json:"comments"`
 }
 
-func getAllComments(id string) commentsRepliesNested {
+func getAllComments(articleID string) commentsRepliesNested {
 	params := url.Values{
 		"tenantId":  []string{"6"},
-		"contentId": []string{id},
+		"contentId": []string{articleID},
 		"limit":     []string{"50"},
 		// "sortBy":    []string{"created_at"},
 		// "sortOrder": []string{"desc"},
@@ -102,7 +119,11 @@ func getAllComments(id string) commentsRepliesNested {
 		resp := getCommentsFromUri(uri)
 
 		for i := range resp.Comments {
-			resp.Comments[i].ArticleID = id
+			// generate uint primary key for GORM
+			resp.Comments[i].ID = utils.StringToUintHash(resp.Comments[i].OriginalID)
+
+			// Convert Article ID to uint so it can be used as a proper foreign key
+			resp.Comments[i].ArticleID = utils.MustIntToUint(articleID)
 		}
 
 		allComments = append(allComments, resp.Comments...)
@@ -139,7 +160,11 @@ func getCommentsFromUri(uri string) CommentApiResponse {
 	return cr
 }
 
-func GetComments(articleID string) []Comment {
+func GetComments(articleID string) []*Comment {
 	csrs := commentsRepliesNested(getAllComments(articleID))
-	return csrs.Flatten()
+	flattened := csrs.Flatten()
+	for _, c := range flattened {
+		c.SetID()
+	}
+	return flattened
 }
