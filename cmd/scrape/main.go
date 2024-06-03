@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -60,7 +59,6 @@ func main() {
 			log.Error(tx.Error)
 		}
 
-		fmt.Println()
 	}
 
 	// buf, err := json.Marshal(articles)
