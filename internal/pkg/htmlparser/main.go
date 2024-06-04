@@ -3,6 +3,7 @@ package htmlparser
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -47,7 +48,7 @@ func GetNodeChildData(n *html.Node) (d string) {
 		return
 	}
 
-	d = n.FirstChild.Data
+	d = strings.TrimSpace(n.FirstChild.Data)
 	return
 }
 
@@ -58,7 +59,7 @@ func GetNodeAttr(n *html.Node, k string) string {
 
 	for _, att := range n.Attr {
 		if att.Key == k {
-			return att.Val
+			return strings.TrimSpace(att.Val)
 		}
 	}
 
