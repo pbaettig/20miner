@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"net/http"
 	"time"
 
@@ -14,12 +15,24 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+var (
+	dbPath string
+)
+
 func main() {
+	flag.StringVar(&dbPath, "db", "", "path to the SQLite DB file")
+	flag.Parse()
+
+	if dbPath == "" {
+		log.Fatal("-db parameter is required")
+	}
+
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
+	log.Infof("opening DB file %s", dbPath)
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		panic("failed to connect database")
 	}
