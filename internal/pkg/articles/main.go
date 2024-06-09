@@ -32,7 +32,6 @@ type Shares struct {
 type Article struct {
 	ArticleLink
 	gorm.Model
-	// ID              uint
 	PublicationDate time.Time
 	Category        string
 	Text            string
@@ -40,6 +39,8 @@ type Article struct {
 	Comments        []*comments.Comment
 }
 
+// Get full article details from Article Link by downloading the page
+// and parsing the HTML
 func (al ArticleLink) Get(c *http.Client) Article {
 	a := Article{ArticleLink: al}
 	a.ID = utils.MustIntToUint(al.OriginalID)
@@ -71,10 +72,6 @@ func (al ArticleLink) Get(c *http.Client) Article {
 			parentTestID := hp.GetNodeAttr(n.Parent, "data-testid")
 			if parentTestID == "ButtonShare" && n.FirstChild.Type == html.TextNode {
 				a.Shares = Shares{Value: utils.MustIntToUint(hp.GetNodeChildData(n))}
-				// fmt.Printf("************** Class: %s\n", class)
-				// fmt.Printf("************** Parent: %+v\n", n.Parent)
-				// fmt.Printf("************** Acitivity: %s\n", hp.GetNodeChildData(n))
-				// fmt.Println()
 			}
 		}
 
@@ -117,6 +114,7 @@ func processArticleLinkNode(n *html.Node) (a ArticleLink) {
 	return
 }
 
+// GetArticleLinks prepares a list of all articles found on the frontpage
 func GetArticleLinks(c *http.Client, uri string) (articles []ArticleLink, err error) {
 	doc, err := hp.RootNodeFromURL(c, uri)
 	if err != nil {

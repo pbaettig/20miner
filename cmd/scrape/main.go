@@ -16,11 +16,13 @@ import (
 )
 
 var (
-	dbPath string
+	dbPath      string
+	httpTimeout time.Duration
 )
 
 func main() {
 	flag.StringVar(&dbPath, "db", "", "path to the SQLite DB file")
+	flag.DurationVar(&httpTimeout, "timeout", 5*time.Second, "timeout for any HTTP requests")
 	flag.Parse()
 
 	if dbPath == "" {
@@ -28,7 +30,7 @@ func main() {
 	}
 
 	client := &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: httpTimeout,
 	}
 
 	log.Infof("opening DB file %s", dbPath)
@@ -41,7 +43,7 @@ func main() {
 		DoUpdates: clause.AssignmentColumns([]string{"updated_at"}),
 	})
 
-	// Migrate the schema
+	log.Infof("performing schema auto-migration...")
 	db.AutoMigrate(&articles.Article{})
 	db.AutoMigrate(&articles.Shares{})
 	db.AutoMigrate(&comments.Comment{})
@@ -55,7 +57,6 @@ func main() {
 
 	log.Infof("got %d article links from front page", len(articleLinks))
 
-	// articles := make([]articles.Article, 0)
 	for i, al := range articleLinks {
 		fields := log.Fields{
 			"num":  i + 1,
@@ -66,26 +67,10 @@ func main() {
 
 		article.Comments = comments.GetComments(article.OriginalID)
 
-		// articles = append(articles, article)
 		log.WithFields(fields).Info("inserting to DB")
 		if tx := db.Create(&article); tx.Error != nil {
 			log.Error(tx.Error)
 		}
 
 	}
-
-	// buf, err := json.Marshal(articles)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// fd, err := os.OpenFile("articles.json", os.O_CREATE|os.O_RDWR, 0755)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer fd.Close()
-
-	// if _, err := fd.Write(buf); err != nil {
-	// 	log.Fatal(err)
-	// }
 }

@@ -8,6 +8,8 @@ import (
 	"golang.org/x/net/html"
 )
 
+// RootNodeFromURL downloads the HTML source from URL, parses it and returns
+// a pointer to it's root node
 func RootNodeFromURL(c *http.Client, url string) (n *html.Node, err error) {
 	resp, err := c.Get(url)
 	if err != nil {
@@ -20,6 +22,7 @@ func RootNodeFromURL(c *http.Client, url string) (n *html.Node, err error) {
 	return
 }
 
+// VisitNodes visits every node under `n` and invokes `callbackFn` on it
 func VisitNodes(n *html.Node, callbackFn func(n *html.Node, siblings []*html.Node)) {
 	if n == nil {
 		return
@@ -39,6 +42,8 @@ func VisitNodes(n *html.Node, callbackFn func(n *html.Node, siblings []*html.Nod
 	}
 }
 
+// GetNodeChildData gets the given nodes child data
+// empty string if there is no child data
 func GetNodeChildData(n *html.Node) (d string) {
 	if n == nil {
 		return
@@ -52,6 +57,7 @@ func GetNodeChildData(n *html.Node) (d string) {
 	return
 }
 
+// GetNodeAttr gets the given attribute `k` from the node `n`
 func GetNodeAttr(n *html.Node, k string) string {
 	if n == nil {
 		return ""
